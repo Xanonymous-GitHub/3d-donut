@@ -13,78 +13,78 @@ from numpy.typing import NDArray
 
 @dataclass(frozen=True)
 class DonutRenderer:
-    screen_size: int
-    theta_spacing: Final[float] = 0.07
-    phi_spacing: Final[float] = 0.02
-    R1: Final[float] = 1.0
-    R2: Final[float] = 2.0
-    K2: Final[float] = 5.0
-    K1: float = field(init=False)
-    illumination: NDArray[str] = field(
+    canvas_size: int
+    delta_theta: Final[float] = 0.07
+    delta_phi: Final[float] = 0.02
+    inner_radius: Final[float] = 1.0
+    outer_radius: Final[float] = 2.0
+    viewer_distance: Final[float] = 5.0
+    projection_constant: float = field(init=False)
+    luminance_chars: NDArray[str] = field(
         default_factory=lambda: np.array(list(".,-~:;=!*#$@"))
     )
 
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
-            "K1",
-            self.screen_size * self.K2 * 3 / (8 * (self.R1 + self.R2)),
+            "projection_constant",
+            self.canvas_size * self.viewer_distance * 3 / (8 * (self.inner_radius + self.outer_radius)),
         )
 
-    def render_frame(self, a: float, b: float) -> NDArray[str]:
-        cos_a = np.cos(a)
-        sin_a = np.sin(a)
-        cos_b = np.cos(b)
-        sin_b = np.sin(b)
+    def render_frame(self, angle_theta: float, angle_phi: float) -> NDArray[str]:
+        cos_theta = np.cos(angle_theta)
+        sin_theta = np.sin(angle_theta)
+        cos_phi = np.cos(angle_phi)
+        sin_phi = np.sin(angle_phi)
 
-        output: NDArray[str] = np.full((self.screen_size, self.screen_size), " ")
-        z_buffer: NDArray[float] = np.zeros((self.screen_size, self.screen_size))
+        pixel_buffer: NDArray[str] = np.full((self.canvas_size, self.canvas_size), " ")
+        depth_buffer: NDArray[float] = np.zeros((self.canvas_size, self.canvas_size))
 
-        phi = np.arange(0, 2 * np.pi, self.phi_spacing)
-        theta = np.arange(0, 2 * np.pi, self.theta_spacing)
-        cos_phi = np.cos(phi)
-        sin_phi = np.sin(phi)
-        cos_theta = np.cos(theta)
-        sin_theta = np.sin(theta)
-        circle_x = self.R2 + self.R1 * cos_theta
-        circle_y = self.R1 * sin_theta
+        phi_values = np.arange(0, 2 * np.pi, self.delta_phi)
+        theta_values = np.arange(0, 2 * np.pi, self.delta_theta)
+        cos_phi_vals = np.cos(phi_values)
+        sin_phi_vals = np.sin(phi_values)
+        cos_theta_vals = np.cos(theta_values)
+        sin_theta_vals = np.sin(theta_values)
+        circle_x_values = self.outer_radius + self.inner_radius * cos_theta_vals
+        circle_y_values = self.inner_radius * sin_theta_vals
 
         x = (
-            np.outer(cos_b * cos_phi + sin_a * sin_b * sin_phi, circle_x)
-            - circle_y * cos_a * sin_b
+            np.outer(cos_phi * cos_phi_vals + sin_theta * sin_phi * sin_phi_vals, circle_x_values)
+            - circle_y_values * cos_theta * sin_phi
         ).T
         y = (
-            np.outer(sin_b * cos_phi - sin_a * cos_b * sin_phi, circle_x)
-            + circle_y * cos_a * cos_b
+            np.outer(sin_phi * cos_phi_vals - sin_theta * cos_phi * sin_phi_vals, circle_x_values)
+            + circle_y_values * cos_theta * cos_phi
         ).T
-        z = (self.K2 + cos_a * np.outer(sin_phi, circle_x) + circle_y * sin_a).T
+        z = (self.viewer_distance + cos_theta * np.outer(sin_phi_vals, circle_x_values) + circle_y_values * sin_theta).T
         ooz = 1 / z
-        xp = (self.screen_size / 2 + self.K1 * ooz * x).astype(int)
-        yp = (self.screen_size / 2 - self.K1 * ooz * y).astype(int)
+        xp = (self.canvas_size / 2 + self.projection_constant * ooz * x).astype(int)
+        yp = (self.canvas_size / 2 - self.projection_constant * ooz * y).astype(int)
 
-        l1 = (
-            np.outer(cos_phi, cos_theta) * sin_b - cos_a * np.outer(sin_phi, cos_theta)
-        ) - sin_a * sin_theta
-        l2 = cos_b * (cos_a * sin_theta - np.outer(sin_phi, cos_theta * sin_a))
-        l = np.around((l1 + l2) * 8).astype(int).T
+        luminance_layer1 = (
+            np.outer(cos_phi_vals, cos_theta_vals) * sin_phi - cos_theta * np.outer(sin_phi_vals, cos_theta_vals)
+        ) - sin_theta * sin_theta_vals
+        luminance_layer2 = cos_phi * (cos_theta * sin_theta_vals - np.outer(sin_phi_vals, cos_theta_vals * sin_theta))
+        luminance_index = np.around((luminance_layer1 + luminance_layer2) * 8).astype(int).T
 
-        mask_l = l >= 0
-        chars = self.illumination[l]
+        valid_luminance_mask = luminance_index >= 0
+        luminance_frame_chars = self.luminance_chars[luminance_index]
 
-        for i in range(self.screen_size):
-            mask = mask_l[i] & (ooz[i] > z_buffer[xp[i], yp[i]])
-            z_buffer[xp[i], yp[i]] = np.where(mask, ooz[i], z_buffer[xp[i], yp[i]])
-            output[xp[i], yp[i]] = np.where(mask, chars[i], output[xp[i], yp[i]])
+        for i in range(self.canvas_size):
+            mask = valid_luminance_mask[i] & (ooz[i] > depth_buffer[xp[i], yp[i]])
+            depth_buffer[xp[i], yp[i]] = np.where(mask, ooz[i], depth_buffer[xp[i], yp[i]])
+            pixel_buffer[xp[i], yp[i]] = np.where(mask, luminance_frame_chars[i], pixel_buffer[xp[i], yp[i]])
 
-        return output
+        return pixel_buffer
 
 
 def main() -> None:
-    columns, lines = shutil.get_terminal_size()
-    screen_size = min(lines, columns // 2)
-    renderer = DonutRenderer(screen_size)
-    a = 1.0
-    b = 1.0
+    terminal_cols, terminal_rows = shutil.get_terminal_size()
+    canvas_size = min(terminal_rows, terminal_cols // 2)
+    renderer = DonutRenderer(canvas_size)
+    angle_theta = 1.0
+    angle_phi = 1.0
 
     # noinspection PyUnusedLocal
     def handle_exit(_signum: int, _frame: None | object) -> None:
@@ -97,10 +97,10 @@ def main() -> None:
     print("\x1b[?25l", end="")
     try:
         while True:
-            a += renderer.theta_spacing
-            b += renderer.phi_spacing
+            angle_theta += renderer.delta_theta
+            angle_phi += renderer.delta_phi
             print("\x1b[H", end="")
-            frame = renderer.render_frame(a, b)
+            frame = renderer.render_frame(angle_theta, angle_phi)
             time.sleep(0.05)
             for row in frame:
                 print(" ".join(row))
