@@ -1,17 +1,14 @@
 [project]
-name = "python_project"
+name = "3d_donut"
 version = "0.1.0"
-description = "A Python project"
+description = "3D Donut is a Python package for creating and manipulating 3D donut shapes."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "fastapi[all]>=0",
     "numpy>=2",
-    "plotly>=5",
-    "polars>=1",
 ]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.9",
+    "ruff>=0",
 ]
