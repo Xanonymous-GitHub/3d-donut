@@ -2,6 +2,10 @@
 
 A CLI 3D donut animation presentation.
 
+```shell
+uv run main.py
+```
+
 ---
 
 ## Quick Start Guide
