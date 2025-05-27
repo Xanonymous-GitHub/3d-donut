@@ -1,4 +1,3 @@
-from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
