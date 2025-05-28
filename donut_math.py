@@ -63,11 +63,28 @@ def compute_frame(
     luminance_layer2 = cos_phi * (
         cos_theta * sin_theta_vals - np.outer(sin_phi_vals, cos_theta_vals * sin_theta)
     )
-    luminance_index = np.around((luminance_layer1 + luminance_layer2) * 8).astype(int).T
-    # Brighten shading by biasing luminance
-    brightness_bias: Final[int] = 2
-    max_index: int = luminance_chars.shape[0] - 1
-    luminance_index = np.clip(luminance_index + brightness_bias, 0, max_index)
+
+    raw_diffuse = luminance_layer1 + luminance_layer2
+
+    half_lambert = np.clip(raw_diffuse * 0.5 + 0.5, 0, 1)
+
+    ambient_strength: Final[float] = 0.1
+    diffuse_strength: Final[float] = 0.7
+    specular_strength: Final[float] = 0.2
+    shininess: Final[float] = 16.0
+
+    specular = np.power(half_lambert, shininess)
+
+    shading = (
+        ambient_strength
+        + diffuse_strength * half_lambert
+        + specular_strength * specular
+    )
+
+    shading_norm = (shading - shading.min()) / (shading.max() - shading.min())
+
+    num_chars = luminance_chars.shape[0]
+    luminance_index = np.around(shading_norm * (num_chars - 1)).astype(int).T
 
     valid_luminance_mask = luminance_index >= 0
     luminance_frame_chars = luminance_chars[luminance_index]
