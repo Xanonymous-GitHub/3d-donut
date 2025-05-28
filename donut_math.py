@@ -1,5 +1,6 @@
 import numpy as np
 from numpy.typing import NDArray
+from typing import Final
 
 
 def compute_frame(
@@ -63,6 +64,10 @@ def compute_frame(
         cos_theta * sin_theta_vals - np.outer(sin_phi_vals, cos_theta_vals * sin_theta)
     )
     luminance_index = np.around((luminance_layer1 + luminance_layer2) * 8).astype(int).T
+    # Brighten shading by biasing luminance
+    brightness_bias: Final[int] = 2
+    max_index: int = luminance_chars.shape[0] - 1
+    luminance_index = np.clip(luminance_index + brightness_bias, 0, max_index)
 
     valid_luminance_mask = luminance_index >= 0
     luminance_frame_chars = luminance_chars[luminance_index]
